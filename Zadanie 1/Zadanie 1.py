@@ -1,11 +1,10 @@
-from binascii import hexlify
-
 from scapy.all import *
 
 
 class Output:
     def __init__(self):
         pass
+
     destination_address = ""
     source_address = ""
 
@@ -28,6 +27,13 @@ def parse_pcap_file(pcap_path):
     return frames
 
 
+def check_bytes(frame):
+    output = Output()
+    frame = frame[7:]
+    output.destination_address = print("{0}.{1}".format(frame[7:13],frame[13:19]))# odstranenie preambuly
+    print(output.destination_address)
+
+
 if __name__ == "__main__":
-    frames = parse_pcap_file("C:\eth-1.pcap")
-    print(frames)
+    frames = parse_pcap_file("D:\eth-1.pcap")
+    check_bytes(frames[0])

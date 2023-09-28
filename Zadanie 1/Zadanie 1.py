@@ -1,39 +1,33 @@
+from binascii import hexlify
+
 from scapy.all import *
-
-
-class Output:
-    def __init__(self):
-        pass
-
-    destination_address = ""
-    source_address = ""
-
-
-class Ethernet(Output):
-    def __init__(self):
-        super().__init__()
 
 
 def parse_pcap_file(pcap_path):
     frames = []
     fileread = rdpcap(pcap_path)
-    counter = 0
     for i in range(len(fileread)):
         for j in range(len(fileread[i])):
-            counter += 1
             frames.append(raw(fileread[i]).hex(" "))
-    print(frames[0])
-
     return frames
 
 
-def check_bytes(frame):
-    output = Output()
-    frame = frame[7:]
-    output.destination_address = print("{0}.{1}".format(frame[7:13],frame[13:19]))# odstranenie preambuly
-    print(output.destination_address)
+def check_frametype(frame):  # TODO funkcia ktora rozhodne ci Ethertype alebo IEEE
+    # - spojit dva byte a porovnat ci je
+    # vacsi alebo mensi ako 1500
+    frametype_bytes = frame[12:16]
+    print(frame)
+    print(frametype_bytes)
+
+
+def check_hexcode(frame):
+    number = frames.index(frame) + 1
+    frame = frame[6:]  # odstranenie preambuly
+    frame = frame.replace(" ", "")
+    lenght = len(frame)
+    frametype = check_frametype(frame)
 
 
 if __name__ == "__main__":
-    frames = parse_pcap_file("D:\eth-1.pcap")
-    check_bytes(frames[0])
+    frames = parse_pcap_file("C:\eth-1.pcap")
+    check_hexcode(frames[0])

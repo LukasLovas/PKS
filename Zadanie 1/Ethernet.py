@@ -10,17 +10,27 @@ class Ethernet(Output):
                       }
 
     def __init__(self, number, lenght, data):
-        super().__init__(number, lenght, data)
-        self.frametype = "Ethernet II"
-        self.destination, self.source = self.resolve_mac_addresses()
-        self.ethertype = self.resolve_ethertype()
+        super().__init__(number, lenght)
+        self.frame_type = "Ethernet II"
+        self.dst_mac, self.src_mac = self.resolve_mac_addresses(data)
+        #self.ethertype = self.resolve_ethertype(data)
+        self.hexa_frame = [" ".join(data.split()[i:i + 16]).upper() for i in range(0, len(data.split()), 16)]
 
-    def resolve_ethertype(self):
-        byte_data = self.data[24:28]
+    def __str__(self):
+        print("frame_number: " + str(self.frame_number))
+        print("len_frame_pcap: " + str(self.len_frame_pcap))
+        print("len_frame_medium: " + str(self.len_frame_medium))
+        print("frametype: " + str(self.frame_type))
+        print("src_mac: " + str(self.src_mac))
+        print("dst_mac: " + str(self.dst_mac))
+        #print("ethertype: " + str(self.ethertype))
+        print("hexaframe: ")
+        [print(row) for row in self.hexa_frame]
+        print("\n")
+
+    def resolve_ethertype(self, data):
+        byte_data = data.replace(" ", "")[24:28].upper()
         if byte_data in self.dict_ethertype.keys():
             return self.dict_ethertype[byte_data]
-
-    def resolve_ipv4_addresses(self):
-        destination = self.data[0:12]
-        source = self.data[12:24]
-        return destination, source
+        else:
+            return "Unknown"

@@ -5,10 +5,15 @@ from scapy.all import *
 
 import ruamel.yaml as ru
 
+import Type_files
 from Ethernet import Ethernet
 from IEEE_LLC import IEEE_LLC
 from IEEE_RAW import IEEE_RAW
 from IEEE_SNAP import IEEE_SNAP
+from Sender import Sender
+from Type_files import *
+
+ipv4_counter = {}
 
 
 def parse_pcap_file(pcap_path):
@@ -19,12 +24,21 @@ def parse_pcap_file(pcap_path):
     return frames
 
 
+def check_ISL(frame):
+    if frame[0:12].upper() == "01000C000000":
+        return True
+    else:
+        return False
+
+
 def diferentiate_type(frame, number, lenght):
     frame_a = frame.replace(" ", "")  # variating between frame with and without spaces for easier work
+    if check_ISL(frame_a):
+        frame_a = frame_a[52:]
+        frame = frame[78:]
     frametype_bytes = int(frame_a[24:26] + frame_a[26:28], 16)
-
     if frametype_bytes >= 1536:
-        return Ethernet(number, lenght, frame)
+        return Ethernet(number, lenght, frame, ipv4_counter)
     elif frametype_bytes <= 1500 and frame_a[28:32] == "ffff":
         return IEEE_RAW(number, lenght, frame)
     elif frametype_bytes <= 1500 and frame_a[28:32] == "aaaa":
@@ -38,6 +52,45 @@ def get_basic_params(frame, number):
     return diferentiate_type(frame, number, lenght)
 
 
+def apply_filter(filter, frames):
+    frames_after_filter = []
+    if filter == "TCP" or filter in Type_files.tcp_types():
+        for frame in frames:
+            if hasattr(frame, "protocol") and frame.protocol == filter:
+                frames_after_filter.append(frame)
+            elif hasattr(frame, "app_protocol") and frame.app_protocol == filter:
+                frames_after_filter.append(frame)
+        tcp_comms_setup(frames_after_filter)
+    if filter == "TFTP":
+        filter = "UDP"
+    else:
+        for frame in frames:
+            if hasattr(frame, "app_protocol") and frame.app_protocol == filter:
+                frames_after_filter.append(frame)
+            elif hasattr(frame, "protocol") and frame.protocol == filter:
+                frames_after_filter.append(frame)
+            elif hasattr(frame, "ethertype") and frame.ethertype == filter:
+                frames_after_filter.append(frame)
+
+    return frames_after_filter
+
+
+def tcp_comms_setup(frames):
+    connections = []
+    for frame in frames:
+        connection = (frame.src_port, frame.dst_port)
+        if connection not in connections:
+            connections.append(connection)
+    check_handshakes(connections)
+
+def check_handshakes(connections):
+    three_way_handshake_flag = False
+    four_way_handshake_flag = False
+    handshake_string = ""
+
+    for connection in connections:
+        if connection =
+
 if __name__ == "__main__":
     print("Choose file: ")
     frame_files = [file for file in listdir("test_pcap_files/vzorky_pcap_na_analyzu")]
@@ -49,18 +102,21 @@ if __name__ == "__main__":
     print("\n\n")
     print("name: 'PKS2023/24'")
     print("pcap_name: " + file_input)
+    filter = input("Filter: ")
     print("packets:")
     resolved_frames = []
     for i in range(len(frames)):
         file_type = get_basic_params(frames[i], i + 1)
         file_type.__str__()
         resolved_frames.append(file_type)
-
+    resolved_frames = apply_filter(filter, resolved_frames)
+    sender = Sender(ipv4_counter)
     yaml = ru.YAML()
     yaml.register_class(Ethernet)
     yaml.register_class(IEEE_LLC)
     yaml.register_class(IEEE_RAW)
     yaml.register_class(IEEE_SNAP)
+    yaml.register_class(Sender)
     with open(r"output.yaml", "w") as file:
         yaml.dump(resolved_frames, file)
         file.close()
@@ -82,7 +138,7 @@ if __name__ == "__main__":
             yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
 
     data = '\n'.join(['' + line for line in yaml_rows])
-    data = "name: PKS2023/24\npcap_name: " + file_input + ".pcap\npackets: " + data
+    data = "name: PKS2023/24\npcap_name: " + str(file_input) + ".pcap\npackets: " + data + "\n" + sender.__str__()
 
     # print(lines)
     # print(data)

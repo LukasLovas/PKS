@@ -1,0 +1,6 @@
+ether_type:
+  0806: ARP
+  0800: IPv4
+  88CC: LLDP
+  86DD: IPv6
+  9000: ECTP

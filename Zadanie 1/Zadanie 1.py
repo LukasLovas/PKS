@@ -52,7 +52,7 @@ if __name__ == "__main__":
     print("packets:")
     resolved_frames = []
     for i in range(len(frames)):
-        file_type = get_basic_params(frames[i], i + 1)  # poradie
+        file_type = get_basic_params(frames[i], i + 1)
         file_type.__str__()
         resolved_frames.append(file_type)
 

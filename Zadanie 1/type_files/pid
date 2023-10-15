@@ -1,0 +1,5 @@
+pid:
+  2000: CDP
+  2004: DTP
+  010B: PVSTP+
+  809B: AppleTalk

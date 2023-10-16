@@ -78,7 +78,7 @@ def apply_filter(filter, frames):
                 frames_after_filter.append(frame)
             elif hasattr(frame, "protocol") and frame.protocol == filter:
                 frames_after_filter.append(frame)
-            elif hasattr(frame, "ethertype") and frame.ethertype == filter:
+            elif hasattr(frame, "ethertype") and frame.ether_type == filter:
                 frames_after_filter.append(frame)
 
 
@@ -119,42 +119,50 @@ if __name__ == "__main__":
         with open(r"output.yaml", "r") as file:
             frames_in_yaml = file.read()
 
-        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "!Filter_TCP", "!Communication"]
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "!Filter_TCP", "!Communication", "\'"]
 
-        for item in delete:
+
+
+        for k, item in enumerate(delete):
             frames_in_yaml = frames_in_yaml.replace(item, "")
 
         yaml_rows = frames_in_yaml.split('\n')
-        # for i in range(len(yaml_rows)):
-        #     if 'hexa_frame' in yaml_rows[i]:
-        #         yaml_rows[i] = yaml_rows[i].replace('hexa_frame:', 'hexa_frame: |')
-        #     if 'frame_number' in yaml_rows[i]:
-        #         yaml_rows[i] = yaml_rows[i].replace('frame_number:', '- frame_number:')
-        #     if 'frame_number' not in yaml_rows[i]:
-        #         yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
-        #     if "number_comm" in yaml_rows[i]:
-        #         yaml_rows[i] = yaml_rows[i].replace('number_comm:', '- number_comm:')
-        #     if "complete_comms:" in yaml_rows[i]:
-        #         yaml_rows.remove(yaml_rows[i+1])
 
         flag = 0
         adjusted_yaml_rows = []  # Create a new list for adjusted lines
-
+        yaml_rows.pop(0)
         for row in yaml_rows:
             if 'hexa_frame' in row:
                 row = row.replace('hexa_frame:', 'hexa_frame: |')
             if 'frame_number' in row:
                 row = row.replace('frame_number:', '- frame_number:')
-            if 'frame_number' not in row:
+            if 'frame_number' not in row and "name" not in row and "comms" not in row:
                 row = textwrap.indent(row, '  ')
             if "number_comm:" in row:
                 row = row.replace('number_comm:', '- number_comm:')
-            if "complete_comms:" in row:
+            if 'NETBIOSNS' in row:
+                row = row.replace('NETBIOSNS', 'NETBIOS-NS')
+            if 'NETBIOSDGM' in row:
+                row = row.replace('NETBIOSDGM', 'NETBIOS-DGM')
+            if 'NETBIOSSSN' in row:
+                row = row.replace('NETBIOSSSN', 'NETBIOS-SSN')
+            if 'FTPDATA' in row:
+                row = row.replace('FTPDATA', 'FTP-DATA')
+            if 'FTPCONTROL' in row:
+                row = row.replace('FTPCONTROL', 'FTP-CONTROL')
+            if 'SNMPTRAP' in row:
+                row = row.replace('SNMPTRAP', 'SNMP-TRAP')
+            if 'DBLSPDISC' in row:
+                row = row.replace('DBLSPDISC', 'DB-LSP-DISC')
+
+            if "complete_comms:" in row or "partial_comms" in row:
                 flag = 1
             elif flag == 1:
                 flag = 0
                 continue
             adjusted_yaml_rows.append(row)
+
+
 
         result = ""
         indent_level = 0
@@ -165,10 +173,16 @@ if __name__ == "__main__":
                 indent_level = 1
             elif "frame_number:" in row:
                 result += " " * (int(indent_level) * 2) + row + "\n"
+            elif "partial_comms" in row:
+                indent_level = 0
+                result += " " * (int(indent_level) * 2) + row + "\n"
             else:
                 result += " " * (int(indent_level) * 2) + row + "\n"
 
-        data = result + "\n" + sender.__str__()
+        if filter == "IPv4":
+            data = result + "\n" + sender.__str__()
+        else:
+            data = result
 
         # print(lines)
         # print(data)

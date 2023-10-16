@@ -5,7 +5,7 @@ class Filter_TCP:
 
     def __init__(self, name, pcap_name, frames, filter):
         self.name = name
-        self.pcap_name = pcap_name
+        self.pcap_name = pcap_name + ".pcap"
         self.filter_name = filter
         self.packets = frames
         self.complete_comms = []

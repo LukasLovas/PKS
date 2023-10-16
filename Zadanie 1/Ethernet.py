@@ -14,7 +14,7 @@ class Ethernet(Output):
         super().__init__(number, lenght)
         self.frame_type = "Ethernet II"
         self.dst_mac, self.src_mac = self.resolve_mac_addresses(data)
-        self.ethertype = self.resolve_ethertype(data)
+        self.ether_type = self.resolve_ethertype(data)
         self.dst_ip, self.src_ip = self.resolve_ip_adresses(data, ipv4_counter)
         self.protocol = self.resolve_protocol_ipv4(data)
         self.src_port, self.dst_port, self.app_protocol = self.resolve_ports(data)
@@ -29,7 +29,7 @@ class Ethernet(Output):
         print("frametype: " + str(self.frame_type))
         print("src_mac: " + str(self.src_mac))
         print("dst_mac: " + str(self.dst_mac))
-        print("ethertype: " + str(self.ethertype))
+        print("ethertype: " + str(self.ether_type))
         print("src_ip: " + str(self.src_ip))
         print("dst_ip: " + str(self.dst_ip))
         print("protocol: " + str(self.protocol))

@@ -23,7 +23,8 @@ class IEEE_SNAP(Output):
         print("src_mac: " + str(self.src_mac))
         print("dst_mac: " + str(self.dst_mac))
         print("pid: " + str(self.pid))
-        print("hexaframe: \n" + str(self.hexa_frame))
+        print("hexaframe: ")
+        [print(row) for row in self.hexa_frame]
         print("\n")
 
 

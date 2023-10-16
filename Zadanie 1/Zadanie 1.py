@@ -12,6 +12,8 @@ from IEEE_RAW import IEEE_RAW
 from IEEE_SNAP import IEEE_SNAP
 from Sender import Sender
 from Type_files import *
+from Filter_TCP import Filter_TCP
+from Communication import Communication
 
 ipv4_counter = {}
 
@@ -52,6 +54,13 @@ def get_basic_params(frame, number):
     return diferentiate_type(frame, number, lenght)
 
 
+def check_filter(filter):
+    if filter == "":
+        return False
+    else:
+        return True
+
+
 def apply_filter(filter, frames):
     frames_after_filter = []
     if filter == "TCP" or filter in Type_files.tcp_types():
@@ -60,7 +69,7 @@ def apply_filter(filter, frames):
                 frames_after_filter.append(frame)
             elif hasattr(frame, "app_protocol") and frame.app_protocol == filter:
                 frames_after_filter.append(frame)
-        tcp_comms_setup(frames_after_filter)
+        return Filter_TCP("PKS2023/24", str(file_input), frames_after_filter, filter)
     if filter == "TFTP":
         filter = "UDP"
     else:
@@ -72,24 +81,6 @@ def apply_filter(filter, frames):
             elif hasattr(frame, "ethertype") and frame.ethertype == filter:
                 frames_after_filter.append(frame)
 
-    return frames_after_filter
-
-
-def tcp_comms_setup(frames):
-    connections = []
-    for frame in frames:
-        connection = (frame.src_port, frame.dst_port)
-        if connection not in connections:
-            connections.append(connection)
-    check_handshakes(connections)
-
-def check_handshakes(connections):
-    three_way_handshake_flag = False
-    four_way_handshake_flag = False
-    handshake_string = ""
-
-    for connection in connections:
-        if connection =
 
 if __name__ == "__main__":
     print("Choose file: ")
@@ -109,7 +100,6 @@ if __name__ == "__main__":
         file_type = get_basic_params(frames[i], i + 1)
         file_type.__str__()
         resolved_frames.append(file_type)
-    resolved_frames = apply_filter(filter, resolved_frames)
     sender = Sender(ipv4_counter)
     yaml = ru.YAML()
     yaml.register_class(Ethernet)
@@ -117,31 +107,100 @@ if __name__ == "__main__":
     yaml.register_class(IEEE_RAW)
     yaml.register_class(IEEE_SNAP)
     yaml.register_class(Sender)
-    with open(r"output.yaml", "w") as file:
-        yaml.dump(resolved_frames, file)
-        file.close()
+    yaml.register_class(Filter_TCP)
+    yaml.register_class(Communication)
+    if check_filter(filter):
+        output = apply_filter(filter, resolved_frames)
 
-    with open(r"output.yaml", "r") as file:
-        frames_in_yaml = file.read()
+        with open(r"output.yaml", "w") as file:
+            yaml.dump(output, file)
+            file.close()
 
-    delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-"]
-    for item in delete:
-        frames_in_yaml = frames_in_yaml.replace(item, "")
+        with open(r"output.yaml", "r") as file:
+            frames_in_yaml = file.read()
 
-    yaml_rows = frames_in_yaml.split('\n')
-    for i in range(len(yaml_rows)):
-        if 'hexa_frame' in yaml_rows[i]:
-            yaml_rows[i] = yaml_rows[i].replace('hexa_frame:', 'hexa_frame: |')
-        if 'frame_number' in yaml_rows[i]:
-            yaml_rows[i] = yaml_rows[i].replace('frame_number:', '- frame_number:')
-        if 'frame_number' not in yaml_rows[i]:
-            yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "!Filter_TCP", "!Communication"]
 
-    data = '\n'.join(['' + line for line in yaml_rows])
-    data = "name: PKS2023/24\npcap_name: " + str(file_input) + ".pcap\npackets: " + data + "\n" + sender.__str__()
+        for item in delete:
+            frames_in_yaml = frames_in_yaml.replace(item, "")
 
-    # print(lines)
-    # print(data)
+        yaml_rows = frames_in_yaml.split('\n')
+        # for i in range(len(yaml_rows)):
+        #     if 'hexa_frame' in yaml_rows[i]:
+        #         yaml_rows[i] = yaml_rows[i].replace('hexa_frame:', 'hexa_frame: |')
+        #     if 'frame_number' in yaml_rows[i]:
+        #         yaml_rows[i] = yaml_rows[i].replace('frame_number:', '- frame_number:')
+        #     if 'frame_number' not in yaml_rows[i]:
+        #         yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
+        #     if "number_comm" in yaml_rows[i]:
+        #         yaml_rows[i] = yaml_rows[i].replace('number_comm:', '- number_comm:')
+        #     if "complete_comms:" in yaml_rows[i]:
+        #         yaml_rows.remove(yaml_rows[i+1])
 
-    with open('output.yaml', 'w') as file:
-        file.write(data)
+        flag = 0
+        adjusted_yaml_rows = []  # Create a new list for adjusted lines
+
+        for row in yaml_rows:
+            if 'hexa_frame' in row:
+                row = row.replace('hexa_frame:', 'hexa_frame: |')
+            if 'frame_number' in row:
+                row = row.replace('frame_number:', '- frame_number:')
+            if 'frame_number' not in row:
+                row = textwrap.indent(row, '  ')
+            if "number_comm:" in row:
+                row = row.replace('number_comm:', '- number_comm:')
+            if "complete_comms:" in row:
+                flag = 1
+            elif flag == 1:
+                flag = 0
+                continue
+            adjusted_yaml_rows.append(row)
+
+        result = ""
+        indent_level = 0
+        for row in adjusted_yaml_rows:
+            if "number_comm:" in row:
+                indent_level = 0
+                result += " " * (indent_level * 2) + row + "\n"
+                indent_level = 1
+            elif "frame_number:" in row:
+                result += " " * (int(indent_level) * 2) + row + "\n"
+            else:
+                result += " " * (int(indent_level) * 2) + row + "\n"
+
+        data = result + "\n" + sender.__str__()
+
+        # print(lines)
+        # print(data)
+
+        with open('output.yaml', 'w') as file:
+            file.write(data)
+    else:
+        with open(r"output.yaml", "w") as file:
+            yaml.dump(resolved_frames, file)
+            file.close()
+
+        with open(r"output.yaml", "r") as file:
+            frames_in_yaml = file.read()
+
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-"]
+        for item in delete:
+            frames_in_yaml = frames_in_yaml.replace(item, "")
+
+        yaml_rows = frames_in_yaml.split('\n')
+        for i in range(len(yaml_rows)):
+            if 'hexa_frame' in yaml_rows[i]:
+                yaml_rows[i] = yaml_rows[i].replace('hexa_frame:', 'hexa_frame: |')
+            if 'frame_number' in yaml_rows[i]:
+                yaml_rows[i] = yaml_rows[i].replace('frame_number:', '- frame_number:')
+            if 'frame_number' not in yaml_rows[i]:
+                yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
+
+        data = '\n'.join(['' + line for line in yaml_rows])
+        data = "name: PKS2023/24\npcap_name: " + str(file_input) + ".pcap\npackets: " + data + "\n" + sender.__str__()
+
+        # print(lines)
+        # print(data)
+
+        with open('output.yaml', 'w') as file:
+            file.write(data)

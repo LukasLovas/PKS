@@ -40,9 +40,10 @@ class Ethernet(Output):
         print("\n")
 
     def resolve_ethertype(self, data):
+        dict_ethertype = Type_files.ether_type_types()
         byte_data = data.replace(" ", "")[24:28].upper()
-        if byte_data in self.dict_ethertype.keys():
-            return self.dict_ethertype[byte_data]
+        if byte_data in dict_ethertype.keys():
+            return dict_ethertype[byte_data]
         else:
             return "Unknown"
 
@@ -60,10 +61,11 @@ class Ethernet(Output):
         return destination, source
 
     def resolve_protocol_ipv4(self, data):
+        dict_ipv4 = Type_files.ipv4_types()
         d = data.replace(" ", "")
         protocol = d[46: 48]
-        if protocol in self.dict_ipv4.keys():
-            return self.dict_ipv4[protocol]
+        if protocol in dict_ipv4.keys():
+            return dict_ipv4[protocol]
         else:
             return protocol
 

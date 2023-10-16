@@ -57,29 +57,32 @@ def get_basic_params(frame, number):
 def check_filter(filter):
     if filter == "":
         return False
+    if filter == "TCP":
+        return "TCP"
+    elif filter in Type_files.tcp_types().values():
+        return filter
     else:
         return True
 
 
 def apply_filter(filter, frames):
     frames_after_filter = []
-    if filter == "TCP" or filter in Type_files.tcp_types():
+    if filter == "TCP" or filter in Type_files.tcp_types().values():
         for frame in frames:
             if hasattr(frame, "protocol") and frame.protocol == filter:
                 frames_after_filter.append(frame)
             elif hasattr(frame, "app_protocol") and frame.app_protocol == filter:
                 frames_after_filter.append(frame)
         return Filter_TCP("PKS2023/24", str(file_input), frames_after_filter, filter)
-    if filter == "TFTP":
-        filter = "UDP"
     else:
         for frame in frames:
             if hasattr(frame, "app_protocol") and frame.app_protocol == filter:
                 frames_after_filter.append(frame)
             elif hasattr(frame, "protocol") and frame.protocol == filter:
                 frames_after_filter.append(frame)
-            elif hasattr(frame, "ethertype") and frame.ether_type == filter:
+            elif hasattr(frame, "ether_type") and frame.ether_type == filter:
                 frames_after_filter.append(frame)
+        return frames_after_filter
 
 
 if __name__ == "__main__":
@@ -109,7 +112,7 @@ if __name__ == "__main__":
     yaml.register_class(Sender)
     yaml.register_class(Filter_TCP)
     yaml.register_class(Communication)
-    if check_filter(filter):
+    if check_filter(filter) == "TCP" or check_filter(filter) in Type_files.tcp_types().values():
         output = apply_filter(filter, resolved_frames)
 
         with open(r"output.yaml", "w") as file:
@@ -120,8 +123,6 @@ if __name__ == "__main__":
             frames_in_yaml = file.read()
 
         delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "!Filter_TCP", "!Communication", "\'"]
-
-
 
         for k, item in enumerate(delete):
             frames_in_yaml = frames_in_yaml.replace(item, "")
@@ -162,8 +163,6 @@ if __name__ == "__main__":
                 continue
             adjusted_yaml_rows.append(row)
 
-
-
         result = ""
         indent_level = 0
         for row in adjusted_yaml_rows:
@@ -190,6 +189,7 @@ if __name__ == "__main__":
         with open('output.yaml', 'w') as file:
             file.write(data)
     else:
+        resolved_frames = apply_filter(filter, resolved_frames)
         with open(r"output.yaml", "w") as file:
             yaml.dump(resolved_frames, file)
             file.close()
@@ -197,7 +197,7 @@ if __name__ == "__main__":
         with open(r"output.yaml", "r") as file:
             frames_in_yaml = file.read()
 
-        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-"]
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-","\'"]
         for item in delete:
             frames_in_yaml = frames_in_yaml.replace(item, "")
 

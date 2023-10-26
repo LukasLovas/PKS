@@ -22,6 +22,13 @@ class Ethernet(Output):
             delattr(self, "app_protocol")
         self.hexa_frame = [" ".join(data.split()[i:i + 16]).upper() for i in range(0, len(data.split()), 16)]
 
+        if self.ether_type == "ARP":
+            delattr(self,"src_port")
+            delattr(self,"dst_port")
+            delattr(self,"protocol")
+
+
+
     def __str__(self):
         print("frame_number: " + str(self.frame_number))
         print("len_frame_pcap: " + str(self.len_frame_pcap))
@@ -32,9 +39,10 @@ class Ethernet(Output):
         print("ethertype: " + str(self.ether_type))
         print("src_ip: " + str(self.src_ip))
         print("dst_ip: " + str(self.dst_ip))
-        print("protocol: " + str(self.protocol))
-        print("src_port: " + str(self.src_port))
-        print("dst_port: " + str(self.dst_port))
+        if self.ether_type != "ARP":
+            print("protocol: " + str(self.protocol))
+            print("src_port: " + str(self.src_port))
+            print("dst_port: " + str(self.dst_port))
         print("hexaframe: ")
         [print(row) for row in self.hexa_frame]
         print("\n")
@@ -45,7 +53,7 @@ class Ethernet(Output):
         if byte_data in dict_ethertype.keys():
             return dict_ethertype[byte_data]
         else:
-            return "Unknown"
+            return "Akos"
 
     def resolve_ip_adresses(self, data, ipv4_counter):
         d = data.replace(" ", "")

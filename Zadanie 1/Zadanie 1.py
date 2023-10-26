@@ -64,25 +64,51 @@ def check_filter(filter):
     else:
         return True
 
+def apply_filter_TCP_SYN(filter, frames):
+    frames_after_filter = []
+    counter = 0
+    for frame in frames:
+            if hasattr(frame, "protocol") and frame.protocol == filter:
+                hex_string = ''.join(frame.hexa_frame).replace(" ", "")
+                flag_byte = int(''.join(hex_string[94:96]), 16)
+                if flag_byte == 2 or flag_byte == 18:
+                    frames_after_filter.append(frame)
+                    counter += 1
+    return frames_after_filter, counter
+
 
 def apply_filter(filter, frames):
     frames_after_filter = []
+    counter = 0
+    if filter == "":
+        return frames,len(frames)
     if filter == "TCP" or filter in Type_files.tcp_types().values():
         for frame in frames:
             if hasattr(frame, "protocol") and frame.protocol == filter:
                 frames_after_filter.append(frame)
+                counter += 1
             elif hasattr(frame, "app_protocol") and frame.app_protocol == filter:
                 frames_after_filter.append(frame)
+                counter += 1
         return Filter_TCP("PKS2023/24", str(file_input), frames_after_filter, filter)
     else:
         for frame in frames:
             if hasattr(frame, "app_protocol") and frame.app_protocol == filter:
                 frames_after_filter.append(frame)
+                counter += 1
             elif hasattr(frame, "protocol") and frame.protocol == filter:
                 frames_after_filter.append(frame)
+                counter += 1
             elif hasattr(frame, "ether_type") and frame.ether_type == filter:
                 frames_after_filter.append(frame)
-        return frames_after_filter
+                counter += 1
+            elif hasattr(frame, "pid") and frame.pid == filter:
+                frames_after_filter.append(frame)
+                counter += 1
+            elif hasattr(frame, "sap") and frame.sap == filter:
+                frames_after_filter.append(frame)
+                counter += 1
+        return frames_after_filter, counter
 
 
 if __name__ == "__main__":
@@ -96,7 +122,11 @@ if __name__ == "__main__":
     print("\n\n")
     print("name: 'PKS2023/24'")
     print("pcap_name: " + file_input)
-    filter = input("Filter: ")
+    doimplementacia = input("Doimplementovana funkcionalita? (0-False/1-True): ")
+    if doimplementacia == "1":
+        filter_input = "TCP"
+    else:
+     filter_input = input("Filter: ")
     print("packets:")
     resolved_frames = []
     for i in range(len(frames)):
@@ -112,8 +142,8 @@ if __name__ == "__main__":
     yaml.register_class(Sender)
     yaml.register_class(Filter_TCP)
     yaml.register_class(Communication)
-    if check_filter(filter) == "TCP" or check_filter(filter) in Type_files.tcp_types().values():
-        output = apply_filter(filter, resolved_frames)
+    if (check_filter(filter_input) == "TCP" and doimplementacia != "1") or (check_filter(filter_input) in Type_files.tcp_types().values() and doimplementacia != "1"):
+        output = apply_filter(filter_input, resolved_frames)
 
         with open(r"output.yaml", "w") as file:
             yaml.dump(output, file)
@@ -178,7 +208,7 @@ if __name__ == "__main__":
             else:
                 result += " " * (int(indent_level) * 2) + row + "\n"
 
-        if filter == "IPv4":
+        if filter_input == "IPv4":
             data = result + "\n" + sender.__str__()
         else:
             data = result
@@ -188,8 +218,8 @@ if __name__ == "__main__":
 
         with open('output.yaml', 'w') as file:
             file.write(data)
-    else:
-        resolved_frames = apply_filter(filter, resolved_frames)
+    elif doimplementacia == "1":
+        resolved_frames, count = apply_filter_TCP_SYN(filter_input, resolved_frames)
         with open(r"output.yaml", "w") as file:
             yaml.dump(resolved_frames, file)
             file.close()
@@ -197,7 +227,7 @@ if __name__ == "__main__":
         with open(r"output.yaml", "r") as file:
             frames_in_yaml = file.read()
 
-        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-","\'"]
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "\'"]
         for item in delete:
             frames_in_yaml = frames_in_yaml.replace(item, "")
 
@@ -211,7 +241,45 @@ if __name__ == "__main__":
                 yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
 
         data = '\n'.join(['' + line for line in yaml_rows])
-        data = "name: PKS2023/24\npcap_name: " + str(file_input) + ".pcap\npackets: " + data + "\n" + sender.__str__()
+        data = "name: PKS2023/24\npcap_name: " + str(
+            file_input) + ".pcap\npackets: " + data + "\nnumber_frames: " + str(count)
+        # print(lines)
+        # print(data)
+
+        with open('output.yaml', 'w') as file:
+            file.write(data)
+
+    else:
+        resolved_frames, count = apply_filter(filter_input, resolved_frames)
+        with open(r"output.yaml", "w") as file:
+            yaml.dump(resolved_frames, file)
+            file.close()
+
+        with open(r"output.yaml", "r") as file:
+            frames_in_yaml = file.read()
+
+        delete = ["!Ethernet", "!IEEE_LLC", "!IEEE_SNAP", "!IEEE_RAW", "-", "\'"]
+        for item in delete:
+            frames_in_yaml = frames_in_yaml.replace(item, "")
+
+        yaml_rows = frames_in_yaml.split('\n')
+        for i in range(len(yaml_rows)):
+            if 'hexa_frame' in yaml_rows[i]:
+                yaml_rows[i] = yaml_rows[i].replace('hexa_frame:', 'hexa_frame: |')
+            if 'frame_number' in yaml_rows[i]:
+                yaml_rows[i] = yaml_rows[i].replace('frame_number:', '- frame_number:')
+            if 'frame_number' not in yaml_rows[i]:
+                yaml_rows[i] = textwrap.indent(yaml_rows[i], '  ')
+
+        data = '\n'.join(['' + line for line in yaml_rows])
+        if filter_input == "":
+            data = "name: PKS2023/24\npcap_name: " + str(
+            file_input) + ".pcap" + "\ncount_of_frames: " + str(
+            count) + "\npackets: " + data + "\n" + sender.__str__()
+        else:
+            data = "name: PKS2023/24\npcap_name: " + str(
+            file_input) + ".pcap\nfilter: " + filter_input + "\ncount_of_frames: " + str(
+            count) + "\npackets: " + data + "\n" + sender.__str__()
 
         # print(lines)
         # print(data)

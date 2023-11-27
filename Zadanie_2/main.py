@@ -1,10 +1,9 @@
 from Server import Server
 from Client import Client
-from GUI import GUI
 import socket
 import threading
 import os
-import customtkinter
+from crc import Calculator, Crc16
 
 if __name__ == "__main__":
     #gui = GUI()

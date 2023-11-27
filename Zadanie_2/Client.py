@@ -1,5 +1,6 @@
 import socket
 from Header import Header
+from crc import Calculator, Crc16
 
 
 class Client:
@@ -20,18 +21,44 @@ class Client:
             data = self.receive()
             print(data)
 
-    def build_initialization_packet(self):
-        pass
-        #return Header(bytes(1), bytes(1), bytes(2), None, bytes(1011))  # TODO treba kym zacnem posielat veci poriesit CRC
-
     def initialize_connection(self):
-        self.sock.sendto(bytes("Initialize", encoding="utf-8"), (self.server_ip, int(self.server_port)))
+        header = self.build_header("Initialize", 1, False, b"", b"")
+        header.crc = bytes(self.calculate_crc(header.get_byte_data()))
+        self.sock.sendto(header.get_byte_data(), (self.server_ip, int(self.server_port)))
         while self.data != "Connection initialized successfully":
             self.data = self.receive()
         print(self.data)
 
+    def calculate_crc(self, data):
+        crc_calculator = Calculator(Crc16.CCITT, optimized=True)
+        crc_result = crc_calculator.checksum(data)
+        return crc_result
+
+    def build_header(self, header_type, fragment_order, next_fragment, data, crc):
+        match header_type:
+            case "Initialize":
+                return Header(bytes(1),
+                              bytes(fragment_order),
+                              bytes([1]) if next_fragment is True else bytes([2]),
+                              bytes(data),
+                              bytes(crc))
+            case "Send message":
+                pass
+            case "Send file":
+                pass
+            case "Keep-alive":
+                pass
+            case "CRC Fault":
+                pass
+            case "Ack":
+                pass
+            case "Switch":
+                pass
+            case "End connection":
+                pass
+
     def receive(self):
-        data, self.server = self.sock.recvfrom(1024)
+        data, self.server = self.sock.recvfrom(1500)
         return str(data, encoding="utf-8")
 
     def send_message(self, message):

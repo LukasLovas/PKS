@@ -25,7 +25,7 @@ class Server:
     def recieve(self):
         data = None
         while data is None:
-            data, self.client = self.sock.recvfrom(1024)
+            data, self.client = self.sock.recvfrom(1500)
         print(f"Received message: {data.decode()}")
         return str(data, encoding="utf-8")
 

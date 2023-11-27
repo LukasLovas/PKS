@@ -1,12 +1,21 @@
 from Server import Server
 from Client import Client
+from Header import Header
 import socket
 import threading
 import os
 from crc import Calculator, Crc16
 
+def calculate_crc(data):
+    crc_calculator = Calculator(Crc16.CCITT, optimized=True)
+    crc_result = crc_calculator.checksum(data)
+    return crc_result
+
+
+
+
+
 if __name__ == "__main__":
-    #gui = GUI()
     mode = int(input("Choose client-side (1) or server-side(2): "))
     if mode == 1:
         ip = socket.gethostbyname(socket.gethostname())

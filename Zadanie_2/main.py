@@ -4,6 +4,7 @@ from Header import Header
 import socket
 import threading
 import os
+import struct
 from crc import Calculator, Crc16
 
 def calculate_crc(data):
@@ -25,6 +26,6 @@ if __name__ == "__main__":
         client = Client(ip, port, server_ip, server_port)
     elif mode == 2:
         ip = socket.gethostbyname(socket.gethostname())
-        port = 50602
+        port = int(input("Listening port: "))
         print(f"IP address: {ip}\nPort: {port}")
         server = Server(ip, port)

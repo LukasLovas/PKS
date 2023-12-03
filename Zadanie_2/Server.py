@@ -17,11 +17,11 @@ class Server:
     def wait_initialization(self):
         while self.client is None:
             self.data = self.receive()
-            self.header = [self.data[0],                                    # frame_type 1B      [0]
-                           struct.unpack("H", self.data[1:3])[0],   # fragment_order 2B  [1]
-                           self.data[3],                                    # next_fragment 1B   [2]
-                           struct.unpack("H", self.data[4:6])[0],   # CRC 2B             [3]
-                           self.data[6:].decode(encoding="utf")]            # Data XB            [4]
+            self.header = [self.data[0],  # frame_type 1B      [0]
+                           struct.unpack("H", self.data[1:3])[0],  # fragment_order 2B  [1]
+                           self.data[3],  # next_fragment 1B   [2]
+                           struct.unpack("H", self.data[4:6])[0],  # CRC 2B             [3]
+                           self.data[6:].decode(encoding="utf-8")]  # Data XB            [4]
             print(f"-----------------------------\n"
                   f"Frame_type: {self.header[0]}\n"
                   f"Fragment_order: {self.header[1]}\n"
@@ -29,27 +29,38 @@ class Server:
                   f"CRC: {self.header[3]}\n"
                   f"Data: {(self.header[4] if self.header[4] != '' else 'empty')}\n")
             if self.header[0] == 1:
-                self.send_initialization_response()
+                self.send_response()
                 return
             else:
                 self.header = None
                 self.client = None
 
     def cycle(self):
-        while self.header[0] != 8:                  # Ukončenie spojenia
+        while self.header[0] != 8:  # Ukončenie spojenia
             data = self.receive()
-            self.header = [self.data[0],                                    # frame_type 1B      [0]
-                           struct.unpack("H", self.data[1:3])[0],   # fragment_order 2B  [1]
-                           self.data[3],                                    # next_fragment 1B   [2]
-                           struct.unpack("H", self.data[4:6])[0],   # CRC 2B             [3]
-                           self.data[6:].decode(encoding="utf")]            # Data XB            [4]
             self.send_response()
 
     def receive(self):
         data = None
         while data is None:
-            data, self.client = self.sock.recvfrom(1500)
-        print(f"Received message: {data}")
+            data, self.client = self.sock.recvfrom(8000)
+        if data[0] == 3:
+            separator = b"|||"
+            separator_index = data.find(separator)
+            file_name = data[6:separator_index]
+            file_data = data[separator_index + 3:]
+            with open("Zadanie_2/Prijate_subory/" + file_name.decode("utf-8"), "wb") as file:
+                file.write(file_data)
+                file.close()
+                print("File saved successfully. Path: Zadanie_2/Prijate_subory/" + file_name.decode())
+        else:
+            self.header = [data[0],  # frame_type 1B      [0]
+                           struct.unpack("H", data[1:3])[0],  # fragment_order 2B  [1]
+                           data[3],  # next_fragment 1B   [2]
+                           struct.unpack("H", data[4:6])[0],  # CRC 2B             [3]
+                           data[6:].decode(encoding="utf-8")]  # Data XB            [4]
+            print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+
         return data
 
     def calculate_crc(self, data):
@@ -64,50 +75,17 @@ class Server:
             return False
 
     def build_header(self, header_type, fragment_order, next_fragment, data):
-        match header_type:
-            case "Keep-alive":
-                header = (
-                        struct.pack("B", 4) +
-                        struct.pack("H", fragment_order) +
-                        struct.pack("?", next_fragment)
-                )
-                encoded_data = data.encode(encoding="utf-8")
-                checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-                return header + checksum + encoded_data
-            case "CRC Fault":
-                header = (
-                struct.pack("B", 5) +
+        header = (
+                struct.pack("B", header_type) +
                 struct.pack("H", fragment_order) +
                 struct.pack("?", next_fragment)
-                )
-                encoded_data = data.encode(encoding="utf-8")
-                checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-                return header + checksum + encoded_data
-            case "Ack":
-                header = (
-                        struct.pack("B", 6) +
-                        struct.pack("H", fragment_order) +
-                        struct.pack("?", next_fragment)
-
-                )
-                encoded_data = data.encode(encoding="utf-8")
-                checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-                return header + checksum + encoded_data
-            case "Switch":
-                header = (
-                        struct.pack("B", 7) +
-                        struct.pack("H", fragment_order) +
-                        struct.pack("?", next_fragment)
-                )
-                encoded_data = data.encode(encoding="utf-8")
-                checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-                return header + checksum + encoded_data
+        )
+        encoded_data = data.encode(encoding="utf-8")
+        checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
+        return header + checksum + encoded_data
 
     def send_response(self):
-        self.sock.sendto(b"Message delivered successfully...", self.client)
-
-    def send_initialization_response(self):
-        header_to_send = self.build_header("Ack", 1, False, "")
+        header_to_send = self.build_header(6, 1, False, "Message delivered successfully...")
         self.sock.sendto(header_to_send, self.client)
 
     def send_connection_end_message(self):

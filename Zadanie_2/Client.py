@@ -1,7 +1,6 @@
 import socket
 import struct
-
-from Header import Header
+import os
 from crc import Calculator, Crc16
 
 
@@ -23,14 +22,23 @@ class Client:
         while True:
             if self.fragment_size is None:
                 self.fragment_size = int(input("Enter fragment size: "))
-            else:
-                if input("Do you want to change fragment size? (Y/N): ") == "Y":
-                    self.fragment_size = int(input("Enter fragment size: "))
-                else:
-                    pass
-            self.send_message(input("Enter your message or enter 'File' for file transfer: "))
+                print("For changing the fragment size, type 'Fragment'")
+            message = input("Enter your message or enter 'File' for file transfer: ")
+            if message == "Fragment":
+                self.fragment_size = None
+                continue
+            if message == "File":
+                print("C:\\Users\\Lukáš\\Downloads\\fotka.png")
+                file_path = input("Type file path: ")
+                while not os.path.isfile(file_path):
+                    print("Path does not lead to a valid file!")
+                    file_path = input("Type file path: ")
+                self.send_file(file_path)
+            self.send_message(message)
             data = self.receive()
-            print(data)
+            print("\033[32mServer response: " + data[6:].decode(encoding="utf") + "\033[0m") if data[6:].decode(
+                encoding="utf") == "Message delivered successfully..." \
+                else '\033[31mServer response: ' + data[6:].decode(encoding="utf") + "\033[0m"
 
     def initialize_connection(self):
         header_to_send = self.build_header(1, 1, False, "")
@@ -45,81 +53,26 @@ class Client:
                 else:
                     self.data = "empty"
 
-
     def calculate_crc(self, data):
         crc_calculator = Calculator(Crc16.CCITT, optimized=True)
         crc_result = crc_calculator.checksum(data)
         return crc_result
 
-    # def build_header(self, header_type, fragment_order, next_fragment, data):
-    #     match header_type:
-    #         case "Initialize":
-    #             header = (
-    #                     struct.pack("B", 1) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-    #         case "Send message":
-    #             header = (
-    #                     struct.pack("B", 2) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-    #         case "Send file":
-    #             header = (
-    #                     struct.pack("B", 3) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-    #         case "Keep-alive":
-    #             header = (
-    #                     struct.pack("B", 4) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-    #         case "Switch":
-    #             header = (
-    #                     struct.pack("B", 7) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-    #         case "End connection":
-    #             header = (
-    #                     struct.pack("B", 8) +
-    #                     struct.pack("H", fragment_order) +
-    #                     struct.pack("?", next_fragment)
-    #
-    #             )
-    #             encoded_data = data.encode(encoding="utf-8")
-    #             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
-    #             return header + checksum + encoded_data
-
     def build_header(self, header_type, fragment_order, next_fragment, data):
+        if header_type == 3:
             header = (
                     struct.pack("B", header_type) +
                     struct.pack("H", fragment_order) +
                     struct.pack("?", next_fragment)
-                )
+            )
+            checksum = struct.pack("H", self.calculate_crc(header + data))
+            return header + checksum + data
+        else:
+            header = (
+                    struct.pack("B", header_type) +
+                    struct.pack("H", fragment_order) +
+                    struct.pack("?", next_fragment)
+            )
             encoded_data = data.encode(encoding="utf-8")
             checksum = struct.pack("H", self.calculate_crc(header + encoded_data))
             return header + checksum + encoded_data
@@ -128,18 +81,30 @@ class Client:
         data = None
         while data is None:
             data, self.server = self.sock.recvfrom(1500)
-        return data
+        match data[0]:
+            case 4:  # keep-alive
+                pass
+            case 5:  # CRC-NOK
+                pass
+            case 6:  # ACK
+                return data
+            case 7:  # Switch
+                pass
 
     def send_message(self, data):
-        if data == 'File':
-            data = input("Enter file path: ")                       #TODO vymysliet ako prenasat files + ako prenasat ich nazov!!! povinne aby obe strany vedeli nazov suboru
+        fragmentation = True if len(data.encode(encoding="utf-8")) + 8 + 20 + 6 > self.fragment_size else False
+        if fragmentation:
+            pass
         else:
-            fragmentation = True if len(data.encode(encoding="utf-8")) + 8 + 20 + 6 > self.fragment_size else False
-            if fragmentation:
-                pass
-            else:
-                header_to_send = self.build_header(2, 1, False, data)
-                self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+            header_to_send = self.build_header(2, 1, False, data)
+            self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+
+    def send_file(self, file_path):
+        file_name = os.path.basename(file_path).encode("utf-8")
+        separator = "|||".encode("utf-8")
+        with open(file_path, "rb") as file:
+            header_to_send = self.build_header(3, 1, False, file_name + separator + file.read())
+            self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
 
     def send_end_message(self):
         self.sock.sendto(bytes("End connection", encoding="utf-8"), (self.server_ip, self.server_port))

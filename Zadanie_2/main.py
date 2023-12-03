@@ -1,10 +1,6 @@
 from Server import Server
 from Client import Client
-from Header import Header
 import socket
-import threading
-import os
-import struct
 from crc import Calculator, Crc16
 
 def calculate_crc(data):

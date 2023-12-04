@@ -46,7 +46,7 @@ class Server:
     def cycle(self):
         while self.header[0] != 8:  # Ukončenie spojenia
             data = self.receive()
-            self.send_response()
+        self.quit()
 
     def receive(self):
         data = None
@@ -59,32 +59,67 @@ class Server:
                         separator_index = data.find(separator)
                         file_name = data[6:separator_index]
                         file_data = data[separator_index + 3:]
-                        header = self.receive_header(data)
-                        if self.validate_crc(header[0] + header[1] + header[2] + header[4] ,header[3]):
+                        self.header = self.receive_header(data)
+                        if self.validate_crc(self.header[0] + self.header[1] + self.header[2] + self.header[4],
+                                             self.header[3]):
                             file_path = "Zadanie_2/Prijate_subory/" + file_name.decode("utf-8")
                             with open(file_path, "wb") as file:
                                 file.write(file_data)
                             print(f"File saved successfully. Path: {file_path}")
-                    case 2:
-                        received_data = ""
-                        fragment_order_received = []
-                        if data[3] == 1:
-                            while data[3] == 1:
-                                self.header = self.receive_header(data)
-                                fragment_order_received.append(self.header[1])
-                                received_data += (data[6:].decode(encoding="utf-8") + "\n")
-                                data, self.client = self.sock.recvfrom(1500)
-                            missing_fragments = self.check_fragments(fragment_order_received)
-                            if not missing_fragments:
-                                print(f"Received message: {received_data}")
-                            else:
-                                pass #requestnut chybajuce
+                            self.send_response()
+                            return data
                         else:
-                            self.receive_header(data)
-                            print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                            pass
+
+                    case 2:
+                        self.header = self.receive_header(data)
+                        if data[3] == 1:
+                            received_fragments = []
+                            while data[3] == 1:
+                                fragment_order = self.header[1]
+                                if fragment_order not in received_fragments and self.validate_crc(self.header[0:4] + self.header[5], self.header[4]):
+                                    received_fragments.append(fragment_order)
+                                    print(f"Received fragment: {data[6:].decode(encoding='utf-8')}")
+                            if self.header[2] == 0:
+                                if set(received_fragments) == set(range(1, max(received_fragments) + 1)):
+                                    print("All fragments received successfully.")
+                                    self.send_response()
+                                    return data
+                                else:
+                                    missing_fragments = set(range(1, max(received_fragments) + 1)) - set(received_fragments)
+                                    missing_fragments_string = ""
+                                    for fragment in missing_fragments:
+                                        missing_fragments_string.join(str(fragment))
+                                    header_to_send = self.build_header(5, 1, False, missing_fragments_string)
+                                    self.sock.sendto(header_to_send, self.client)
+                                    missing_fragments_response = None
+                                    while missing_fragments_response is None:
+                                        missing_fragments_response = self.sock.recvfrom(1500)
+                                    missing_fragments_header = self.receive_header(missing_fragments_response)
+
+
+                        # received_data = ""
+                        # missing_fragments = []
+                        # if data[3] == 1:
+                        #     while data[3] == 1:
+                        #         self.header = self.receive_header(data)
+                        #         received_data += (data[6:].decode(encoding="utf-8") + "\n")
+                        #         if not self.validate_crc(self.header[0:4] + self.header[5],self.header[4]):
+                        #             missing_fragments.append(self.header[1])
+                        #         data, self.client = self.sock.recvfrom(1500)
+                        #         if len(missing_fragments) == 0:
+                        #             print(f"Received message: {received_data}")
+                        #         else:
+                        #             pass
+                        #             # vypytaj nove
+                        #
+                        # else:
+                        #     self.receive_header(data)
+                        #     print(f"Received message: {data[6:].decode(encoding='utf-8')}")
                     case 1:
                         self.header = self.receive_header(data)
                         print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                        self.send_response()
                         return data
                     case _:
                         continue
@@ -92,6 +127,7 @@ class Server:
                 if data is not None:
                     self.header = self.receive_header(data)
                     print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                    self.send_response()
                     return data
                 else:
                     continue
@@ -103,6 +139,7 @@ class Server:
                   struct.unpack("H", data[4:6])[0],  # CRC 2B             [3]
                   data[6:].decode(encoding="utf-8")]  # Data XB            [4]
         return header
+
 
     def check_fragments(self, fragment_order):
         result = []

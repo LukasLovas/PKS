@@ -1,7 +1,13 @@
+import os
 import socket
 import struct
 
 from crc import Calculator, Crc16
+
+
+def create_file_directory(directory_path, directory_name):
+    dir_path = directory_path + "\\" + directory_name
+    os.makedirs(dir_path, exist_ok=True)
 
 
 class Server:
@@ -10,27 +16,29 @@ class Server:
         self.client = None
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((ip, port))
-        self.data = "empty"
+        self.data = None
+        create_file_directory(os.getcwd() + "\\Zadanie_2", "Prijate_subory")
         self.wait_initialization()
         self.cycle()
 
     def wait_initialization(self):
         while self.client is None:
             self.data = self.receive()
-            self.header = [self.data[0],  # frame_type 1B      [0]
-                           struct.unpack("H", self.data[1:3])[0],  # fragment_order 2B  [1]
-                           self.data[3],  # next_fragment 1B   [2]
-                           struct.unpack("H", self.data[4:6])[0],  # CRC 2B             [3]
-                           self.data[6:].decode(encoding="utf-8")]  # Data XB            [4]
-            print(f"-----------------------------\n"
-                  f"Frame_type: {self.header[0]}\n"
-                  f"Fragment_order: {self.header[1]}\n"
-                  f"Next_fragment: {self.header[2]}\n"
-                  f"CRC: {self.header[3]}\n"
-                  f"Data: {(self.header[4] if self.header[4] != '' else 'empty')}\n")
-            if self.header[0] == 1:
-                self.send_response()
-                return
+            if self.data is not None:
+                self.header = [self.data[0],  # frame_type 1B      [0]
+                               struct.unpack("H", self.data[1:3])[0],  # fragment_order 2B  [1]
+                               self.data[3],  # next_fragment 1B   [2]
+                               struct.unpack("H", self.data[4:6])[0],  # CRC 2B             [3]
+                               self.data[6:].decode(encoding="utf-8")]  # Data XB            [4]
+                print(f"-----------------------------\n"
+                      f"Frame_type: {self.header[0]}\n"
+                      f"Fragment_order: {self.header[1]}\n"
+                      f"Next_fragment: {self.header[2]}\n"
+                      f"CRC: {self.header[3]}\n"
+                      f"Data: {(self.header[4] if self.header[4] != '' else 'empty')}\n")
+                if self.header[0] == 1:
+                    self.send_response()
+                    return
             else:
                 self.header = None
                 self.client = None
@@ -43,25 +51,67 @@ class Server:
     def receive(self):
         data = None
         while data is None:
-            data, self.client = self.sock.recvfrom(8000)
-        if data[0] == 3:
-            separator = b"|||"
-            separator_index = data.find(separator)
-            file_name = data[6:separator_index]
-            file_data = data[separator_index + 3:]
-            with open("Zadanie_2/Prijate_subory/" + file_name.decode("utf-8"), "wb") as file:
-                file.write(file_data)
-                file.close()
-                print("File saved successfully. Path: Zadanie_2/Prijate_subory/" + file_name.decode())
-        else:
-            self.header = [data[0],  # frame_type 1B      [0]
-                           struct.unpack("H", data[1:3])[0],  # fragment_order 2B  [1]
-                           data[3],  # next_fragment 1B   [2]
-                           struct.unpack("H", data[4:6])[0],  # CRC 2B             [3]
-                           data[6:].decode(encoding="utf-8")]  # Data XB            [4]
-            print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+            data, self.client = self.sock.recvfrom(1500)
+            if self.client is not None:
+                match data[0]:
+                    case 3:
+                        separator = b"|||"
+                        separator_index = data.find(separator)
+                        file_name = data[6:separator_index]
+                        file_data = data[separator_index + 3:]
+                        header = self.receive_header(data)
+                        if self.validate_crc(header[0] + header[1] + header[2] + header[4] ,header[3]):
+                            file_path = "Zadanie_2/Prijate_subory/" + file_name.decode("utf-8")
+                            with open(file_path, "wb") as file:
+                                file.write(file_data)
+                            print(f"File saved successfully. Path: {file_path}")
+                    case 2:
+                        received_data = ""
+                        fragment_order_received = []
+                        if data[3] == 1:
+                            while data[3] == 1:
+                                self.header = self.receive_header(data)
+                                fragment_order_received.append(self.header[1])
+                                received_data += (data[6:].decode(encoding="utf-8") + "\n")
+                                data, self.client = self.sock.recvfrom(1500)
+                            missing_fragments = self.check_fragments(fragment_order_received)
+                            if not missing_fragments:
+                                print(f"Received message: {received_data}")
+                            else:
+                                pass #requestnut chybajuce
+                        else:
+                            self.receive_header(data)
+                            print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                    case 1:
+                        self.header = self.receive_header(data)
+                        print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                        return data
+                    case _:
+                        continue
+            elif self.client is None:
+                if data is not None:
+                    self.header = self.receive_header(data)
+                    print(f"Received message: {data[6:].decode(encoding='utf-8')}")
+                    return data
+                else:
+                    continue
 
-        return data
+    def receive_header(self, data):
+        header = [data[0],  # frame_type 1B      [0]
+                  struct.unpack("H", data[1:3])[0],  # fragment_order 2B  [1]
+                  data[3],  # next_fragment 1B   [2]
+                  struct.unpack("H", data[4:6])[0],  # CRC 2B             [3]
+                  data[6:].decode(encoding="utf-8")]  # Data XB            [4]
+        return header
+
+    def check_fragments(self, fragment_order):
+        result = []
+        for i in range(len(fragment_order)):
+            if fragment_order[i] != i + 1:
+                result.append(fragment_order[i])
+        if len(result) == 0:
+            result = False
+        return result
 
     def calculate_crc(self, data):
         crc_calculator = Calculator(Crc16.CCITT, optimized=True)

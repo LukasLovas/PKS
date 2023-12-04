@@ -21,8 +21,9 @@ class Client:
     def cycle(self):
         while True:
             if self.fragment_size is None:
-                self.fragment_size = int(input("Enter fragment size: "))
-                print("For changing the fragment size, type 'Fragment'")
+                fragment_size = int(input("Fragment size can vary between 64B to 1466B\nEnter fragment size: "))  #IP/UDP/CUSTOM
+                self.fragment_size = self.check_fragment_size(fragment_size)
+                print(f"Your fragment size is: {self.fragment_size}\n For changing the fragment size, type 'Fragment'")
             message = input("Enter your message or enter 'File' for file transfer: ")
             if message == "Fragment":
                 self.fragment_size = None
@@ -57,6 +58,14 @@ class Client:
         crc_calculator = Calculator(Crc16.CCITT, optimized=True)
         crc_result = crc_calculator.checksum(data)
         return crc_result
+
+    def check_fragment_size(self, fragment_size):
+        if fragment_size >= 1466:
+            return 1466
+        elif fragment_size <= 64:
+            return 64
+        else:
+            return fragment_size
 
     def build_header(self, header_type, fragment_order, next_fragment, data):
         if header_type == 3:
@@ -94,7 +103,12 @@ class Client:
     def send_message(self, data):
         fragmentation = True if len(data.encode(encoding="utf-8")) + 8 + 20 + 6 > self.fragment_size else False
         if fragmentation:
-            pass
+            fragment_number = 1
+            while data:
+                fragment, data = data[:self.fragment_size], data[self.fragment_size:]
+                header_to_send = self.build_header(2, fragment_number, True if len(data) > 0 else False, fragment)
+                self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                fragment_number += 1
         else:
             header_to_send = self.build_header(2, 1, False, data)
             self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))

@@ -77,7 +77,7 @@ class Server:
                             received_fragments = []
                             while data[3] == 1:
                                 fragment_order = self.header[1]
-                                if fragment_order not in received_fragments and self.validate_crc(self.header[0:4] + self.header[5], self.header[4]):
+                                if fragment_order not in received_fragments and self.validate_crc(self.header[0] + self.header[1] + self.header[2] + self.header[4], self.header[3]):
                                     received_fragments.append(fragment_order)
                                     print(f"Received fragment: {data[6:].decode(encoding='utf-8')}")
                             if self.header[2] == 0:
@@ -89,14 +89,16 @@ class Server:
                                     missing_fragments = set(range(1, max(received_fragments) + 1)) - set(received_fragments)
                                     missing_fragments_string = ""
                                     for fragment in missing_fragments:
-                                        missing_fragments_string.join(str(fragment))
+                                        missing_fragments_string.join(str(fragment) + "")
                                     header_to_send = self.build_header(5, 1, False, missing_fragments_string)
                                     self.sock.sendto(header_to_send, self.client)
                                     missing_fragments_response = None
                                     while missing_fragments_response is None:
                                         missing_fragments_response = self.sock.recvfrom(1500)
                                     missing_fragments_header = self.receive_header(missing_fragments_response)
-
+                        else:
+                            self.send_response()
+                            print(f"Received fragment: {self.header[4]}")
 
                         # received_data = ""
                         # missing_fragments = []
@@ -181,3 +183,5 @@ class Server:
     def quit(self):
         self.sock.close()
         print("Server closed")
+
+

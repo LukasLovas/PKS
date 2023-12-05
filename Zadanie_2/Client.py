@@ -96,43 +96,92 @@ class Client:
         while data is None:
             data, self.server = self.sock.recvfrom(1500)
         self.header = self.receive_header(data)
+        print("ACK received") if self.header[0] == 6 else None
         return data
 
     def send_message(self, data):
         fragmentation = True if len(data.encode(encoding="utf-8")) + 8 + 20 + 6 > self.fragment_size else False
-        data_save = data
         if fragmentation:
             fragment_number = 1
+            total_fragments = (len(data) // self.fragment_size) + 1
+            fragments_sent = []
             while data:
                 fragment, data = data[:self.fragment_size], data[self.fragment_size:]
+                fragments_sent.append(fragment)
                 header_to_send = self.build_header(2, fragment_number, True if len(data) > 0 else False, fragment)
                 self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
                 fragment_number += 1
+            received_data = None
+            while received_data is None:
+                received_data = self.receive()
+            if self.header[0] == 5:
+                missing_fragments_string = self.header[4]
+                missing_fragments = [int(fragment) for fragment in missing_fragments_string.split(" ")]
+                dummy_header = self.header
+                for fragment in missing_fragments:
+                    self.header = dummy_header
+                    missing_fragment_data = fragments_sent.__getitem__(fragment-1)
+                    while self.header[0] != 6:
+                        header_to_send = self.build_header(2, fragment, True if len(missing_fragments) >= 1 else False,
+                                                           missing_fragment_data)
+                        self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                        response_to_fragments = self.receive()
+                        if response_to_fragments[0] == 6:
+                            pass
+
+            elif self.header[0] == 6:
+                return
         else:
             header_to_send = self.build_header(2, 1, False, data)
             self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
-        received_data = None
-        while received_data is None:
-            received_data = self.receive()
-        if self.header[0] == 5:
-            missing_fragments_string = self.header[4]
-            missing_fragments = missing_fragments_string.split(" ")
-            for fragment in missing_fragments:
-                missing_fragment_data = data_save[(fragment - 1) * self.fragment_size:fragment * self.fragment_size]
-                while self.header[0] != 6:
-                    header_to_send = self.build_header(2, fragment, True if len(missing_fragments) >= 1 else False,
-                                                       missing_fragment_data)
-                    response_to_fragment = self.receive()
-
-        elif self.header[0] == 6:
-            return
+            response_data = self.receive()
+            if response_data[0] == 6:
+                return
 
     def send_file(self, file_path):
         file_name = os.path.basename(file_path).encode("utf-8")
         separator = "|||".encode("utf-8")
         with open(file_path, "rb") as file:
-            header_to_send = self.build_header(3, 1, False, file_name + separator + file.read())
-            self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+            data = file.read()
+            fragmentation = True if len(data) + 8 + 20 + 6 > self.fragment_size else False
+            if fragmentation:
+                fragment_number = 1
+                total_fragments = (len(data) // self.fragment_size) + 1
+                fragments_sent = []
+                while data:
+                    fragment, data = data[:self.fragment_size], data[self.fragment_size:]
+                    fragments_sent.append(fragment)
+                    header_to_send = self.build_header(3, fragment_number, True if len(data) > 0 else False, fragment)
+                    self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                    fragment_number += 1
+                received_data = None
+                while received_data is None:
+                    received_data = self.receive()
+                if self.header[0] == 5:
+                    missing_fragments_string = self.header[4]
+                    missing_fragments = [int(fragment) for fragment in missing_fragments_string.split(" ")]
+                    dummy_header = self.header
+                    for fragment in missing_fragments:
+                        self.header = dummy_header
+                        missing_fragment_data = fragments_sent.__getitem__(fragment - 1)
+                        while self.header[0] != 6:
+                            header_to_send = self.build_header(3, fragment,
+                                                               True if len(missing_fragments) >= 1 else False,
+                                                               missing_fragment_data)
+                            self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                            response_to_fragments = self.receive()
+                            if response_to_fragments[0] == 6:
+                                pass
+
+                elif self.header[0] == 6:
+                    return
+
+            else:
+                header_to_send = self.build_header(3, 1, False, file_name + separator + data)
+                self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                response_data = self.receive()
+                if response_data[0] == 6:
+                    return
 
     def receive_header(self, data):
         header = [data[0],  # frame_type 1B      [0]
@@ -153,15 +202,21 @@ class Client:
         feature = input("Availible features:\n1. Send a fragmented message with a data error (checksum error because of modified data)\nInput: ")
         match feature:
             case "1":
-                self.send_fragmented_message_with_errors("Lorem ipsum dolor sit amet . Grafickí a typografickí operátori to dobre vedia, v skutočnosti všetky profesie zaoberajúce sa vesmírom komunikácie majú k týmto slovám stabilný vzťah, ale čo to je? Lorem ipsum je atrapa textu bez zmyslu. Je to sekvencia latinských slov , ktoré sú umiestnené tak, ako sú umiestnené „netvorte vety s úplným zmyslom, ale dajte život testovaciemu textu užitočnému na vyplnenie medzier, ktoré budú následne obsadené textami ad hoc zostavenými odborníkmi na komunikáciu. Je určite najznámejší zástupný text , aj keď existujú rôzne verzie odlišujúce sa od poradia, v ktorom sa latinské slová opakujú. Lorem ipsum obsahuje používané písma , ktoré sa viac používajú, čo je aspekt čo vám umožní mať prehľad o vykreslení textu z hľadiska výberu písma an d veľkosť písma. Pri odkazovaní na Lorem ipsum sa používajú rôzne výrazy, a to vyplniť text , fiktívny text , slepý text alebo zástupný text : v skratke, jeho význam môže byť tiež nulový, ale jeho užitočnosť je taká jasná, že môže prechádzať storočiami a odolávať ironickým a moderným verziám, ktoré prišli s príchodom webu.")
+                self.send_fragmented_message_with_errors("Lorem ipsum dolor sit amet . Grafickí a typografickí operátori to dobre vedia, v skutočnosti všetky profesie zaoberajúce sa vesmírom komunikácie majú k týmto slovám stabilný vzťah, ale čo to je? Lorem ipsum je atrapa textu bez zmyslu. Je to sekvencia latinských slov , ktoré sú umiestnené tak, ako sú umiestnené „netvorte vety s úplným zmyslom, ale dajte život testovaciemu textu užitočnému na vyplnenie medzier, ktoré budú následne obsadené textami ad hoc zostavenými odborníkmi na komunikáciu. Je určite najznámejší zástupný text , aj keď existujú rôzne verzie odlišujúce sa od poradia, v ktorom sa latinské slová opakujú. Lorem ipsum obsahuje používané písma , ktoré sa viac používajú, čo je aspekt čo vám umožní mať prehľad o vykreslení textu z hľadiska výberu písma a veľkosť písma. Pri odkazovaní na Lorem ipsum sa používajú rôzne výrazy, a to vyplniť text , fiktívny text , slepý text alebo zástupný text : v skratke, jeho význam môže byť tiež nulový, ale jeho užitočnosť je taká jasná, že môže prechádzať storočiami a odolávať ironickým a moderným verziám, ktoré prišli s príchodom webu. AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA KONIEEEC")
     def send_fragmented_message_with_errors(self, data):
         fragmentation = True if len(data.encode(encoding="utf-8")) + 8 + 20 + 6 > self.fragment_size else False
         data_save = data
         if fragmentation:
             fragment_number = 1
+            total_fragments = (len(data) // self.fragment_size) + 1
+            num_of_errors = 0
+            error_counter = 0
+            fragments_sent = []
             while data:
                 fragment, data = data[:self.fragment_size], data[self.fragment_size:]
-                header_to_send = self.build_header_for_error(2, fragment_number, True if len(data) > 0 else False, fragment)
+                fragments_sent.append(fragment)
+                header_to_send, error_predicate = self.build_header_for_error(2, fragment_number, True if len(data) > 0 else False, fragment, None if data else 1, error_counter)
+                num_of_errors += error_predicate
                 self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
                 fragment_number += 1
             received_data = None
@@ -169,15 +224,20 @@ class Client:
                 received_data = self.receive()
             if self.header[0] == 5:
                 missing_fragments_string = self.header[4]
-                missing_fragments = missing_fragments_string.split(" ")
+                missing_fragments = [int(fragment) for fragment in missing_fragments_string.split(" ")]
+                dummy_header = self.header
                 for fragment in missing_fragments:
-                    missing_fragment_data = data_save[(fragment - 1) * self.fragment_size:fragment * self.fragment_size]
+                    self.header = dummy_header
+                    missing_fragment_data = fragments_sent.__getitem__(fragment-1)
                     while self.header[0] != 6:
                         header_to_send = self.build_header(2, fragment, True if len(missing_fragments) >= 1 else False,
                                                            missing_fragment_data)
-                        response_to_fragment = self.receive()
+                        self.sock.sendto(header_to_send, (self.server_ip, int(self.server_port)))
+                        response_to_fragments = self.receive()
+                        if response_to_fragments[0] == 6:
+                            pass
 
-    def build_header_for_error(self, header_type, fragment_order, next_fragment, data):
+    def build_header_for_error(self, header_type, fragment_order, next_fragment, data, flag, error_counter):
         if header_type == 3:
             header = (
                     struct.pack("B", header_type) +
@@ -185,12 +245,15 @@ class Client:
                     struct.pack("?", next_fragment)
             )
             checksum = struct.pack("H", self.calculate_crc(header + data))
-
-            roll = random.choice([0, 1])
-            if roll == 1:
-                return header + checksum + data + b'\x00'
+            if flag is None and error_counter <= 2:
+                roll = random.choice([0, 1])
+                if roll == 1:
+                    return header + checksum + data + b'\x00', 1
+                else:
+                    return header + checksum + data, 0
             else:
-                return header + checksum + data
+                return header + checksum + data + b'\x00', 0
+
         else:
             header = (
                     struct.pack("B", header_type) +
@@ -199,10 +262,17 @@ class Client:
             )
             encoded_data_real = data.encode(encoding="utf-8")
             checksum = struct.pack("H", self.calculate_crc(header + encoded_data_real))
-            encoded_data_fault = (data + "errorfault123").encode(encoding="utf-8")
-            roll = random.choice([0, 1])
-            if roll == 1:
-                return header + checksum + encoded_data_fault
+            rand_index = random.randint(0, self.fragment_size)
+            encoded_data_fault = (data[:rand_index] + "errorfault123" + data[rand_index:len(data) - len("errorfault123")]).encode(encoding="utf-8")
+            if error_counter >= 2:
+                return header + checksum + encoded_data_real, 0
+            elif flag is None:
+                roll = random.choice([0, 1])
+                if roll == 1:
+                    return header + checksum + encoded_data_fault, 1
+                else:
+                    return header + checksum + encoded_data_real, 0
             else:
-                return header + checksum + encoded_data_real
+                return header + checksum + encoded_data_fault, 0
+
 
